@@ -25,10 +25,10 @@ pub(super) fn trim_newline_right(mut s: &str) -> &str {
 pub(super) fn trim_newline_left(mut s: &str) -> &str {
     if let Some('\r') = s.chars().next() {
         s = &s[1..];
+    }
 
-        if let Some('\n') = s.chars().next() {
-            s = &s[1..];
-        }
+    if let Some('\n') = s.chars().next() {
+        s = &s[1..];
     }
 
     s

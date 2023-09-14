@@ -74,7 +74,7 @@ pub fn prompt_from_file(path: impl AsRef<Path>) -> std::io::Result<Prompt> {
 }
 
 use std::fs::File;
-use std::io::{Read, Write, Error, ErrorKind, Result};
+use std::io::{Error, ErrorKind, Read, Result, Write};
 
 pub fn insert_response_into_file(file: impl AsRef<Path>, response: &str) -> Result<()> {
     let mut contents = String::new();
@@ -99,4 +99,3 @@ pub fn insert_response_into_file(file: impl AsRef<Path>, response: &str) -> Resu
 
     Ok(())
 }
-
