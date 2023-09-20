@@ -3,10 +3,10 @@ use std::path::Path;
 use std::time::Duration;
 
 use crate::files::{ServerConfig, ServerPrompt};
-use reqwest::Client;
-use tokio::process::{Child, Command};
-use serde_json::Value;
 use anyhow::{bail, Result};
+use reqwest::Client;
+use serde_json::Value;
+use tokio::process::{Child, Command};
 
 use std::os::unix::process::CommandExt;
 
@@ -21,8 +21,7 @@ pub struct Servers {
 fn spawn_server(config: ServerConfig, port: u16) -> Result<Child> {
     let mut cmd = std::process::Command::new(&config.executable_file);
 
-    cmd
-        .args(["--stream", "--skiplauncher", "--unbantokens"])
+    cmd.args(["--stream", "--skiplauncher", "--unbantokens"])
         .args(["--model", &config.model_file])
         .args(["--host", "127.0.0.1"])
         .args(["--port", &format!("{port}")])
