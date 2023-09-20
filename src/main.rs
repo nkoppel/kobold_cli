@@ -1,15 +1,17 @@
 #![allow(dead_code)]
 
+mod cli;
 mod files;
 mod server;
 
 use files::*;
+use server::*;
 
-fn main() {
-    // println!("{}", serde_yaml::to_string(&Config::default()).unwrap());
-    let prompt = prompt_from_file("test.txt").unwrap();
-    let server_prompt = prompt.get_server_prompt("MathInstruct");
-
-    println!("{}", serde_json::to_string(&server_prompt).unwrap());
-    // insert_response_into_file("test.txt", "\n### Response:\n2 + 2 = 4\n### Instruction:\n").unwrap();
+#[tokio::main]
+async fn main() {
+    let mut cli = cli::CliState::new();
+    cli.load_file("test.txt").await.unwrap();
+    cli.set_character("Continue".to_string()).await.unwrap();
+    cli.generate().await.unwrap();
+    tokio::signal::ctrl_c().await.unwrap();
 }

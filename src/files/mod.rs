@@ -4,6 +4,7 @@ mod preprocess;
 pub use parse::*;
 pub use preprocess::*;
 
+use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -39,6 +40,7 @@ pub struct ServerPrompt {
 
 impl Default for ServerPrompt {
     fn default() -> Self {
+        // Defaults taken from Kobold Lite.
         Self {
             prompt: String::new(),
             max_length: 50,
@@ -49,7 +51,7 @@ impl Default for ServerPrompt {
             rep_pen_slope: 0.7,
             sampler_full_determinism: false,
             sampler_order: vec![6, 0, 1, 3, 4, 2, 5],
-            sampler_seed: rand::random::<u64>() % (1 << 50),
+            sampler_seed: rand::random::<u64>(),
             stop_sequence: Vec::new(),
             temperature: 0.7,
             tfs: 1.0,
@@ -61,7 +63,7 @@ impl Default for ServerPrompt {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ServerConfig {
     pub(crate) executable_file: String,
@@ -70,6 +72,7 @@ pub struct ServerConfig {
     pub(crate) threads: usize,
     pub(crate) blas_batch_size: isize,
     pub(crate) instances: usize,
+    pub(crate) port: u16,
     pub(crate) custom_args: Vec<String>,
 }
 
@@ -82,6 +85,7 @@ impl Default for ServerConfig {
             threads: 1,
             blas_batch_size: 512,
             instances: 1,
+            port: 5001,
             custom_args: Vec::new(),
         }
     }
@@ -93,8 +97,8 @@ pub struct Config {
     pub(crate) user_name: String,
     // i.e. "{{char}}:" or "\n{{Char}}" or "### Instruction:"
     pub(crate) stop_sequence: Vec<String>,
-    pub(crate) default_prefix: String,
-    pub(crate) default_suffix: String,
+    pub(crate) prefix: String,
+    pub(crate) suffix: String,
     pub(crate) prompt: ServerPrompt,
     pub(crate) server: ServerConfig,
 }
@@ -108,8 +112,7 @@ pub struct Prompt {
 
 // May need to make this more efficient in the future
 fn replace_char_user(s: &str, char: &str, user: &str) -> String {
-    s
-        .replace("{{char}}", char)
+    s.replace("{{char}}", char)
         .replace("{{Char}}", char)
         .replace("{{user}}", user)
         .replace("{{User}}", user)
@@ -121,37 +124,51 @@ impl Prompt {
         let mut names: Vec<&str> = self.characters.iter().map(|char| &char.name[..]).collect();
         names.push(&self.config.user_name);
 
-        self.config.stop_sequence
+        self.config
+            .stop_sequence
             .iter()
             .flat_map(|stop| {
-                names.iter().map(|name| replace_char_user(stop, name, &self.config.user_name))
+                names
+                    .iter()
+                    .map(|name| replace_char_user(stop, name, &self.config.user_name))
             })
             .collect::<std::collections::HashSet<_>>()
             .into_iter()
             .collect()
     }
 
-    fn get_character(&self, character: &str) -> Result<&Character, String> {
+    fn get_character(&self, character: &str) -> Result<&Character> {
         self.characters
             .iter()
             .find(|char| char.name == character)
-            .ok_or_else(|| format!("No character with name {character}!"))
+            .ok_or_else(|| anyhow!("No character with name {character}!"))
     }
 
-    pub fn get_server_prompt(&self, character: &str) -> ServerPrompt {
+    fn prefix(&self, character: &Character) -> String {
+        let prefix = if character.prefix.is_empty() {
+            &self.config.prefix
+        } else {
+            &character.prefix
+        };
+        replace_char_user(prefix, &character.name, &self.config.user_name)
+    }
+
+    fn suffix(&self, character: &Character) -> String {
+        let suffix = if character.suffix.is_empty() {
+            &self.config.suffix
+        } else {
+            &character.suffix
+        };
+        replace_char_user(suffix, &character.name, &self.config.user_name)
+    }
+
+    pub fn get_server_prompt(&self, character: &str) -> Result<ServerPrompt> {
         let mut out = self.config.prompt.clone();
 
         out.stop_sequence = self.stop_sequences();
 
-        // TODO: Error handling
-        let character = self.get_character(character).unwrap();
-
-        let prefix = if character.prefix.is_empty() {
-            &self.config.default_prefix
-        } else {
-            &character.prefix
-        };
-        let prefix = replace_char_user(prefix, &character.name, &self.config.user_name);
+        let character = self.get_character(character)?;
+        let prefix = self.prefix(character);
 
         out.prompt = character.definition.clone();
         out.prompt.push_str(&self.prompt);
@@ -159,10 +176,10 @@ impl Prompt {
 
         out.prompt = replace_char_user(&out.prompt, &character.name, &self.config.user_name);
 
-        out
+        Ok(out)
     }
 
-    pub fn finalize_response(&self, character: &str, mut response: String) -> String {
+    pub fn finalize_response(&self, character: &str, mut response: String) -> Result<String> {
         let stop_sequences = self.stop_sequences();
 
         for sequence in &stop_sequences {
@@ -172,18 +189,14 @@ impl Prompt {
             }
         }
 
-        // TODO: Error handling
-        let character = self.get_character(character).unwrap();
+        let character = self.get_character(character)?;
 
-        let suffix = if character.suffix.is_empty() {
-            &self.config.default_suffix
-        } else {
-            &character.suffix
-        };
-        let suffix = replace_char_user(suffix, &character.name, &self.config.user_name);
+        let prefix = self.prefix(character);
+        let suffix = self.suffix(character);
 
+        response.insert_str(0, &prefix);
         response.push_str(&suffix);
 
-        response
+        Ok(response)
     }
 }

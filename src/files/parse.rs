@@ -1,4 +1,5 @@
 use super::*;
+use anyhow::{bail, Result};
 
 use std::path::Path;
 
@@ -14,17 +15,19 @@ const ENDCHAR_TAG: &str = "<|ENDCHAR|>";
 
 const END_TAG: &str = "|>";
 
-// TODO: Error handling
-pub fn parse_prompt(s: &str) -> Prompt {
-    let config = s
-        .find(CONFIG_TAG)
-        .and_then(|i| {
-            let s = &s[i + CONFIG_TAG.len()..];
+pub fn parse_prompt(s: &str) -> Result<Prompt> {
+    let config = {
+        let Some(i) = s.find(CONFIG_TAG) else {
+            bail!("No config found!")
+        };
+        let s = &s[i + CONFIG_TAG.len()..];
 
-            s.find(ENDCONFIG_TAG)
-                .map(|j| serde_yaml::from_str(&s[..j]).unwrap())
-        })
-        .unwrap_or_default();
+        let Some(j) = s.find(ENDCONFIG_TAG) else {
+            bail!("No config found!")
+        };
+
+        serde_yaml::from_str(&s[..j])?
+    };
 
     let mut prompt = String::new();
     let mut view = s;
@@ -51,7 +54,7 @@ pub fn parse_prompt(s: &str) -> Prompt {
         let Some(i) = view.find(CHAR_DEFINITION_TAG) else {
             break;
         };
-        let mut char = serde_yaml::from_str::<Character>(&view[..i]).unwrap();
+        let mut char = serde_yaml::from_str::<Character>(&view[..i])?;
 
         view = &view[i + CHAR_DEFINITION_TAG.len()..];
         let Some(i) = view.find(ENDCHAR_TAG) else {
@@ -62,26 +65,26 @@ pub fn parse_prompt(s: &str) -> Prompt {
         characters.push(char);
     }
 
-    Prompt {
+    Ok(Prompt {
         config,
         characters,
         prompt,
-    }
+    })
 }
 
-pub fn prompt_from_file(path: impl AsRef<Path>) -> std::io::Result<Prompt> {
-    Ok(parse_prompt(&preprocess_file(path)?))
+pub fn prompt_from_file(path: impl AsRef<Path>) -> Result<Prompt> {
+    parse_prompt(&preprocess_file(path)?)
 }
 
 use std::fs::File;
-use std::io::{Error, ErrorKind, Read, Result, Write};
+use std::io::{Read, Write};
 
 pub fn insert_response_into_file(file: impl AsRef<Path>, response: &str) -> Result<()> {
     let mut contents = String::new();
     File::open(&file)?.read_to_string(&mut contents)?;
 
     let Some(mut i) = contents.rfind(ENDPROMPT_TAG) else {
-        return Err(Error::new(ErrorKind::InvalidData, "No ENDPROMPT in file!"));
+        bail!("No ENDPROMPT in file!")
     };
 
     if let Some(b'\n') = contents.as_bytes().get(i.wrapping_sub(1)) {

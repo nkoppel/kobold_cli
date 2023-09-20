@@ -13,10 +13,10 @@ fn join_filename(file1: impl AsRef<Path>, file2: impl AsRef<Path>) -> PathBuf {
 pub(super) fn trim_newline_right(mut s: &str) -> &str {
     if let Some('\n') = s.chars().next_back() {
         s = &s[..s.len() - 1];
+    }
 
-        if let Some('\r') = s.chars().next_back() {
-            s = &s[..s.len() - 1];
-        }
+    if let Some('\r') = s.chars().next_back() {
+        s = &s[..s.len() - 1];
     }
 
     s
@@ -32,10 +32,6 @@ pub(super) fn trim_newline_left(mut s: &str) -> &str {
     }
 
     s
-}
-
-pub(super) fn trim_newline(s: &str) -> &str {
-    trim_newline_left(trim_newline_right(s))
 }
 
 const INCLUDE_TAG: &str = "<|INCLUDE";
