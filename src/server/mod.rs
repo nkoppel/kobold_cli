@@ -183,16 +183,18 @@ async fn check_actor(
 ) -> Result<()> {
     let mut check_len = 0;
 
-    for i in 0.. {
-        if i > 0 {
-            tokio::time::sleep(interval).await;
-        }
+    loop {
+        tokio::time::sleep(interval).await;
 
         if abort.try_recv().is_ok() {
             break;
         }
 
         let check = check_request(&client, &url).await?;
+
+        if check_len > check.len() {
+            break;
+        }
         print!("{}", &check[check_len..]);
         std::io::stdout().flush()?;
         check_len = check.len();

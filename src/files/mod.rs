@@ -11,8 +11,10 @@ use serde::{Deserialize, Serialize};
 #[serde(default)]
 pub struct Character {
     pub(crate) name: String,
+    pub(crate) temporary_prefix: String,
     pub(crate) prefix: String,
     pub(crate) suffix: String,
+    pub(crate) stop_sequence: Vec<String>,
     pub(crate) definition: String,
 }
 
@@ -95,10 +97,6 @@ impl Default for ServerConfig {
 #[serde(default)]
 pub struct Config {
     pub(crate) user_name: String,
-    // i.e. "{{char}}:" or "\n{{Char}}" or "### Instruction:"
-    pub(crate) stop_sequence: Vec<String>,
-    pub(crate) prefix: String,
-    pub(crate) suffix: String,
     pub(crate) prompt: ServerPrompt,
     pub(crate) server: ServerConfig,
 }
@@ -112,19 +110,17 @@ pub struct Prompt {
 
 // May need to make this more efficient in the future
 fn replace_char_user(s: &str, char: &str, user: &str) -> String {
-    s.replace("{{char}}", char)
-        .replace("{{Char}}", char)
-        .replace("{{user}}", user)
-        .replace("{{User}}", user)
+    s.replace("{{char}}", char).replace("{{user}}", user)
 }
 
 impl Prompt {
     // This can be made more efficient
-    fn stop_sequences(&self) -> Vec<String> {
+    fn stop_sequences(&self, character: &str) -> Result<Vec<String>> {
         let mut names: Vec<&str> = self.characters.iter().map(|char| &char.name[..]).collect();
         names.push(&self.config.user_name);
 
-        self.config
+        Ok(self
+            .get_character(character)?
             .stop_sequence
             .iter()
             .flat_map(|stop| {
@@ -134,7 +130,7 @@ impl Prompt {
             })
             .collect::<std::collections::HashSet<_>>()
             .into_iter()
-            .collect()
+            .collect())
     }
 
     fn get_character(&self, character: &str) -> Result<&Character> {
@@ -144,35 +140,17 @@ impl Prompt {
             .ok_or_else(|| anyhow!("No character with name {character}!"))
     }
 
-    fn prefix(&self, character: &Character) -> String {
-        let prefix = if character.prefix.is_empty() {
-            &self.config.prefix
-        } else {
-            &character.prefix
-        };
-        replace_char_user(prefix, &character.name, &self.config.user_name)
-    }
-
-    fn suffix(&self, character: &Character) -> String {
-        let suffix = if character.suffix.is_empty() {
-            &self.config.suffix
-        } else {
-            &character.suffix
-        };
-        replace_char_user(suffix, &character.name, &self.config.user_name)
-    }
-
     pub fn get_server_prompt(&self, character: &str) -> Result<ServerPrompt> {
         let mut out = self.config.prompt.clone();
 
-        out.stop_sequence = self.stop_sequences();
+        out.stop_sequence = self.stop_sequences(character)?;
 
         let character = self.get_character(character)?;
-        let prefix = self.prefix(character);
 
         out.prompt = character.definition.clone();
         out.prompt.push_str(&self.prompt);
-        out.prompt.push_str(&prefix);
+        out.prompt.push_str(&character.temporary_prefix);
+        out.prompt.push_str(&character.prefix);
 
         out.prompt = replace_char_user(&out.prompt, &character.name, &self.config.user_name);
 
@@ -180,7 +158,7 @@ impl Prompt {
     }
 
     pub fn finalize_response(&self, character: &str, mut response: String) -> Result<String> {
-        let stop_sequences = self.stop_sequences();
+        let stop_sequences = self.stop_sequences(character)?;
 
         for sequence in &stop_sequences {
             if response.strip_suffix(sequence).is_some() {
@@ -191,11 +169,8 @@ impl Prompt {
 
         let character = self.get_character(character)?;
 
-        let prefix = self.prefix(character);
-        let suffix = self.suffix(character);
-
-        response.insert_str(0, &prefix);
-        response.push_str(&suffix);
+        response.insert_str(0, &character.prefix);
+        response.push_str(&character.suffix);
 
         Ok(response)
     }
