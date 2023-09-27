@@ -10,21 +10,24 @@ const ENDCONFIG_TAG: &str = "<|ENDCONFIG|>";
 const PROMPT_TAG: &str = "<|PROMPT|>";
 
 const CHAR_TAG: &str = "<|CHAR|>";
-const CHAR_DEFINITION_TAG: &str = "<|CHAR_DEFINITION|>";
 const ENDCHAR_TAG: &str = "<|ENDCHAR|>";
+
+const CONTEXT_TAG: &str = "<|CONTEXT";
+const ENDCONTEXT_TAG: &str = "<|ENDCONTEXT|>";
+const END_TAG: &str = "|>";
 
 impl FromStr for Prompt {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self> {
-        let config = {
+        let config: Config = {
             let Some(i) = s.find(CONFIG_TAG) else {
-                panic!("No config found!")
+                bail!("No config found!")
             };
             let s = &s[i + CONFIG_TAG.len()..];
 
             let Some(j) = s.find(ENDCONFIG_TAG) else {
-                panic!("No config found!")
+                bail!("No config found!")
             };
 
             serde_yaml::from_str(&s[..j])?
@@ -41,23 +44,43 @@ impl FromStr for Prompt {
         while let Some(i) = view.find(CHAR_TAG) {
             view = &view[i + CHAR_TAG.len()..];
 
-            let Some(i) = view.find(CHAR_DEFINITION_TAG) else {
-                break;
-            };
-            let mut char = serde_yaml::from_str::<Character>(&view[..i])?;
-
-            view = &view[i + CHAR_DEFINITION_TAG.len()..];
             let Some(i) = view.find(ENDCHAR_TAG) else {
-                break;
+                bail!("Unclosed char tag!")
             };
-            char.definition = trim_newline_left(&view[..i]).to_string();
+            let char = serde_yaml::from_str::<Character>(&view[..i])?;
 
             characters.push(char);
+
+            view = &view[i + ENDCHAR_TAG.len()..];
+        }
+
+        let mut contexts = HashMap::new();
+        view = s;
+
+        while let Some(i) = view.find(CONTEXT_TAG) {
+            view = &view[i + CONTEXT_TAG.len()..];
+
+            let Some(i) = view.find(END_TAG) else {
+                break;
+            };
+
+            let name = view[..i].trim();
+            view = &view[i + END_TAG.len()..];
+
+            let Some(i) = view.find(ENDCONTEXT_TAG) else {
+                bail!("Unclosed context tag!")
+            };
+
+            let definition = trim_newline_left_right(&view[..i]);
+            contexts.insert(name.to_string(), replace_char_user(definition, name, &config.user_name));
+
+            view = &view[i + ENDCONTEXT_TAG.len()..];
         }
 
         Ok(Prompt {
             config,
             characters,
+            contexts,
             prompt,
         })
     }

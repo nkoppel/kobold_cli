@@ -28,6 +28,7 @@ fn spawn_server(config: ServerConfig, port: u16) -> Result<Child> {
         .args(["--threads", &format!("{}", config.threads)])
         .args(["--blasbatchsize", &format!("{}", config.blas_batch_size)])
         .args(["--contextsize", &format!("{}", config.context_size)])
+        .args(&config.custom_args)
         .current_dir(
             Path::new(&config.executable_file)
                 .parent()

@@ -166,7 +166,10 @@ impl CliState {
         loop {
             let line = match rl.readline("> ") {
                 Ok(l) => l,
-                Err(rustyline::error::ReadlineError::Interrupted) => break,
+                Err(rustyline::error::ReadlineError::Interrupted) => {
+                    println!("Use 'exit' to exit.");
+                    continue;
+                },
                 Err(e) => return Err(e.into())
             };
 

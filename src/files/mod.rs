@@ -1,10 +1,12 @@
 mod parse;
 mod preprocess;
 
+use std::collections::{HashMap, HashSet};
+
 pub use parse::*;
 pub use preprocess::*;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Result, Context};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -15,7 +17,7 @@ pub struct Character {
     pub(crate) prefix: String,
     pub(crate) suffix: String,
     pub(crate) stop_sequence: Vec<String>,
-    pub(crate) definition: String,
+    pub(crate) context: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -105,6 +107,7 @@ pub struct Config {
 pub struct Prompt {
     pub(crate) config: Config,
     pub(crate) characters: Vec<Character>,
+    pub(crate) contexts: HashMap<String, String>,
     pub(crate) prompt: String,
 }
 
@@ -128,7 +131,7 @@ impl Prompt {
                     .iter()
                     .map(|name| replace_char_user(stop, name, &self.config.user_name))
             })
-            .collect::<std::collections::HashSet<_>>()
+            .collect::<HashSet<_>>()
             .into_iter()
             .collect())
     }
@@ -140,25 +143,29 @@ impl Prompt {
             .ok_or_else(|| anyhow!("No character with name {character}!"))
     }
 
-    pub fn get_server_prompt(&self, character: &str) -> Result<ServerPrompt> {
+    pub fn get_server_prompt(&self, char: &str) -> Result<ServerPrompt> {
         let mut out = self.config.prompt.clone();
+        let character = self.get_character(char)?;
 
-        out.stop_sequence = self.stop_sequences(character)?;
+        out.stop_sequence = self.stop_sequences(char)?;
 
-        let character = self.get_character(character)?;
+        let context = if let Some(ctx) = character.context.as_ref() {
+            self.contexts.get(ctx).with_context(|| format!("Context {ctx} not found in prompt!"))?
+        } else {
+            ""
+        };
 
-        out.prompt = character.definition.clone();
+        out.prompt = context.to_string();
         out.prompt.push_str(&self.prompt);
         out.prompt.push_str(&character.temporary_prefix);
         out.prompt.push_str(&character.prefix);
-
-        out.prompt = replace_char_user(&out.prompt, &character.name, &self.config.user_name);
+        out.prompt = replace_char_user(&out.prompt, char, &self.config.user_name);
 
         Ok(out)
     }
 
-    pub fn finalize_response(&self, character: &str, mut response: String) -> Result<String> {
-        let stop_sequences = self.stop_sequences(character)?;
+    pub fn finalize_response(&self, char: &str, mut response: String) -> Result<String> {
+        let stop_sequences = self.stop_sequences(char)?;
 
         for sequence in &stop_sequences {
             if response.strip_suffix(sequence).is_some() {
@@ -167,11 +174,11 @@ impl Prompt {
             }
         }
 
-        let character = self.get_character(character)?;
+        let character = self.get_character(char)?;
 
         response.insert_str(0, &character.prefix);
         response.push_str(&character.suffix);
 
-        Ok(response)
+        Ok(replace_char_user(&response, char, &self.config.user_name))
     }
 }
