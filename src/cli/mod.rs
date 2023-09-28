@@ -11,7 +11,7 @@ use anyhow::{bail, Result};
 use std::path::{Path, PathBuf};
 
 #[derive(Default)]
-pub struct CliState {
+pub struct Cli {
     servers: Option<Servers>,
     file: Option<PathBuf>,
     prompt: Option<Prompt>,
@@ -19,8 +19,8 @@ pub struct CliState {
     history: History,
 }
 
-impl CliState {
-    pub fn new() -> CliState {
+impl Cli {
+    pub fn new() -> Cli {
         Self::default()
     }
 

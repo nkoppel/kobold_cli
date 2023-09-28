@@ -6,6 +6,5 @@ mod server;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let mut cli = cli::CliState::new();
-    cli.run().await
+    cli::Cli::new().run().await
 }
