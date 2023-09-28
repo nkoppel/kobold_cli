@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 pub use parse::*;
 pub use preprocess::*;
 
-use anyhow::{anyhow, Result, Context};
+use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -150,7 +150,9 @@ impl Prompt {
         out.stop_sequence = self.stop_sequences(char)?;
 
         let context = if let Some(ctx) = character.context.as_ref() {
-            self.contexts.get(ctx).with_context(|| format!("Context {ctx} not found in prompt!"))?
+            self.contexts
+                .get(ctx)
+                .with_context(|| format!("Context {ctx} not found in prompt!"))?
         } else {
             ""
         };

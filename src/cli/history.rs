@@ -1,12 +1,14 @@
-use std::collections::HashMap;
 use std::mem;
+
+use anyhow::{Result, bail};
+use radix_trie::{Trie, TrieCommon};
 
 #[derive(Clone, Debug, Default)]
 pub struct History {
     undos: Vec<String>,
     redos: Vec<String>,
     prompt: String,
-    responses: HashMap<String, Vec<String>>,
+    responses: Trie<String, Vec<String>>,
 }
 
 impl History {
@@ -37,18 +39,36 @@ impl History {
         }
     }
 
-    pub fn add_response(&mut self, response: String) {
-        let responses = self.responses.entry(self.prompt.clone()).or_default();
-
-        if !responses.contains(&response) {
-            responses.push(response);
-        }
+    pub fn add_response(&mut self, response: &str) {
+        self.responses.map_with_default(
+            self.prompt.clone(),
+            |v| v.push(response.to_string()),
+            vec![response.to_string()],
+        );
     }
 
     pub fn responses(&self) -> &[String] {
         self.responses
-            .get(&self.prompt)
+            .get_ancestor_value(&self.prompt)
             .map(|v| &v[..])
             .unwrap_or(&[])
+    }
+
+    pub fn with_response(&mut self, index: usize) -> Result<()> {
+        let Some(node) = self.responses.get_ancestor(&self.prompt) else {
+            bail!("Prompt has no responses!");
+        };
+
+        let Some(prompt) = node.key() else {
+            bail!("Prompt has no responses!");
+        };
+
+        let Some(response) = node.value().and_then(|v| v.get(index)) else {
+            bail!("No response {index} for prompt!");
+        };
+
+        self.prompt = format!("{prompt}{response}");
+
+        Ok(())
     }
 }

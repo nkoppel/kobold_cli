@@ -12,8 +12,6 @@ pub enum Command {
     Undo,
     Redo,
     SwipeList,
-    SwipeNext,
-    SwipePrev,
     SwipeIndex(usize),
 }
 
@@ -45,8 +43,6 @@ impl FromStr for Command {
             Some("swipe") => match words.next() {
                 None => Command::Swipe,
                 Some("list") => Command::SwipeList,
-                Some("next") => Command::SwipeNext,
-                Some("prev") => Command::SwipePrev,
                 Some(s) => {
                     if let Ok(i) = s.parse::<usize>() {
                         Command::SwipeIndex(i)

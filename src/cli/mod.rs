@@ -117,7 +117,7 @@ impl Cli {
 
         generation = prompt.finalize_response(character, generation)?;
         insert_response_into_file(file, &generation)?;
-        self.history.add_response(generation);
+        self.history.add_response(&generation);
         self.reload_file().await?;
         Ok(())
     }
@@ -128,7 +128,7 @@ impl Cli {
 
     pub async fn run_command(&mut self, command: &str) -> Result<bool> {
         match command.parse()? {
-            Command::Help => todo!(),
+            Command::Help => bail!("Command not yet implemented!"),
             Command::Exit => return Ok(false),
             Command::Load(file) => self.load_file(file).await?,
             Command::Reload => self.reload_file().await?,
@@ -147,10 +147,17 @@ impl Cli {
                 self.history.redo();
                 self.write_prompt_to_file()?;
             }
-            Command::SwipeList => todo!(),
-            Command::SwipeNext => todo!(),
-            Command::SwipePrev => todo!(),
-            Command::SwipeIndex(_) => todo!(),
+            Command::SwipeList => {
+                let responses = self.history.responses();
+
+                for (i, response) in responses.iter().enumerate() {
+                    println!("{i}: {:?}", &response[..response.len().min(80)]);
+                }
+            },
+            Command::SwipeIndex(i) => {
+                self.history.with_response(i)?;
+                self.write_prompt_to_file()?;
+            },
         }
 
         Ok(true)
@@ -169,8 +176,11 @@ impl Cli {
                 Err(rustyline::error::ReadlineError::Interrupted) => {
                     println!("Use 'exit' to exit.");
                     continue;
-                },
-                Err(e) => return Err(e.into())
+                }
+                Err(rustyline::error::ReadlineError::Eof) => {
+                    break;
+                }
+                Err(e) => return Err(e.into()),
             };
 
             match self.run_command(&line).await {

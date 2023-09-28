@@ -72,7 +72,10 @@ impl FromStr for Prompt {
             };
 
             let definition = trim_newline_left_right(&view[..i]);
-            contexts.insert(name.to_string(), replace_char_user(definition, name, &config.user_name));
+            contexts.insert(
+                name.to_string(),
+                replace_char_user(definition, name, &config.user_name),
+            );
 
             view = &view[i + ENDCONTEXT_TAG.len()..];
         }
