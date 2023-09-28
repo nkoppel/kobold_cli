@@ -10,6 +10,26 @@ use anyhow::{bail, Result};
 
 use std::path::{Path, PathBuf};
 
+const HELP_STRING: &str = "\
+Meta:
+    help - Display this help text.
+    exit - Exit the program.
+
+Files:
+    load <filename> - Loads a file to use as a prompt.
+    reload/load - Reload the prompt from the file.
+
+Generate:
+    gen - Reload the prompt, generate text according to it, and write the response back to the file.
+    regen/swipe - Undo, then generate text.
+
+History:
+    undo - Undo.
+    redo - Redo.
+    swipe list - Lists all generations from the current prompt.
+    swipe <index> - Writes the response with id <index> to the current file.
+";
+
 #[derive(Default)]
 pub struct Cli {
     servers: Option<Servers>,
@@ -61,7 +81,9 @@ impl Cli {
 
     pub async fn load_file(&mut self, file: impl AsRef<Path>) -> Result<()> {
         self.file = Some(file.as_ref().to_path_buf());
-        self.reload_file().await
+        self.reload_file().await?;
+        self.history.clear();
+        Ok(())
     }
 
     pub async fn set_character(&mut self, character: String) -> Result<()> {
@@ -128,7 +150,7 @@ impl Cli {
 
     pub async fn run_command(&mut self, command: &str) -> Result<bool> {
         match command.parse()? {
-            Command::Help => bail!("Command not yet implemented!"),
+            Command::Help => println!("{HELP_STRING}"),
             Command::Exit => return Ok(false),
             Command::Load(file) => self.load_file(file).await?,
             Command::Reload => self.reload_file().await?,

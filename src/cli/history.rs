@@ -20,6 +20,13 @@ impl History {
         &self.prompt
     }
 
+    pub fn clear(&mut self) {
+        self.undos.clear();
+        self.redos.clear();
+        self.prompt.clear();
+        self.responses = Trie::new();
+    }
+
     pub fn undo(&mut self) {
         if let Some(undo) = self.undos.pop() {
             self.redos.push(mem::replace(&mut self.prompt, undo))
