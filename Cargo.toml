@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 reqwest = { version = "0.11", features = ["json"] }
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["sync", "process", "macros", "rt-multi-thread", "signal"] }
 
 rand = "0.8"
 rustyline = "12" # Create command line interface 
