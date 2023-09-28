@@ -1,6 +1,6 @@
 use std::mem;
 
-use anyhow::{Result, bail};
+use anyhow::{bail, Result};
 use radix_trie::{Trie, TrieCommon};
 
 #[derive(Clone, Debug, Default)]

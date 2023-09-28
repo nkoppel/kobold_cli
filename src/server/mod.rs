@@ -68,6 +68,21 @@ fn generation_cost(last_prompt: &str, new_prompt: &str) -> f64 {
     (new_prompt.len() - shared_prefix_length) as f64 + erased as f64 / 2.
 }
 
+async fn servers_online(client: &Client, urls: &[String]) -> Result<Vec<bool>> {
+    let handles = urls
+        .iter()
+        .map(|url| tokio::spawn(is_online(client.clone(), url.clone())))
+        .collect::<Vec<_>>();
+
+    let mut out = Vec::new();
+
+    for handle in handles {
+        out.push(handle.await??);
+    }
+
+    Ok(out)
+}
+
 impl Servers {
     pub async fn from_config(config: &ServerConfig) -> Result<Servers> {
         let mut children = Vec::new();
@@ -82,20 +97,16 @@ impl Servers {
             last_prompts.push(String::new());
         }
 
+        if servers_online(&client, &urls).await?.into_iter().any(|x| x) {
+            bail!("A Kobold server is already running on at least one specified port!");
+        }
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(900)).await;
+
         loop {
             tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-            let handles = urls
-                .iter()
-                .map(|url| tokio::spawn(is_online(client.clone(), url.clone())))
-                .collect::<Vec<_>>();
 
-            let mut out = true;
-
-            for handle in handles {
-                out &= handle.await??;
-            }
-
-            if out {
+            if servers_online(&client, &urls).await?.into_iter().all(|x| x) {
                 break;
             }
         }
@@ -129,7 +140,7 @@ async fn is_online(client: Client, url: String) -> Result<bool> {
 
     match res {
         Ok(_) => Ok(true),
-        Err(e) if e.is_connect() => Ok(false),
+        Err(e) if e.is_connect() || e.is_request() => Ok(false),
         Err(e) => Err(e.into()),
     }
 }

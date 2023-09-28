@@ -16,11 +16,11 @@ Meta:
     exit - Exit the program.
 
 Files:
-    load <filename> - Loads a file to use as a prompt.
-    reload/load - Reload the prompt from the file.
+    load <filename> - Load a prompt file.
+    reload/load - Reload the current prompt file.
 
 Generate:
-    gen - Reload the prompt, generate text according to it, and write the response back to the file.
+    gen - Reload the prompt file, generate text according to it, and write the response back to the file.
     regen/swipe - Undo, then generate text.
 
 History:
@@ -70,6 +70,7 @@ impl Cli {
 
         if Some(&prompt.config.server) != self.prompt.as_ref().map(|prompt| &prompt.config.server) {
             println!("Initializing server...");
+            std::mem::drop(self.servers.take());
             self.servers = Some(Servers::from_config(&prompt.config.server).await?);
             println!("Done!");
         }
@@ -175,11 +176,11 @@ impl Cli {
                 for (i, response) in responses.iter().enumerate() {
                     println!("{i}: {:?}", &response[..response.len().min(80)]);
                 }
-            },
+            }
             Command::SwipeIndex(i) => {
                 self.history.with_response(i)?;
                 self.write_prompt_to_file()?;
-            },
+            }
         }
 
         Ok(true)
