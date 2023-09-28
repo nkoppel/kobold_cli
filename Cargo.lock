@@ -443,7 +443,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "kobold_tui"
+name = "kobold_cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",

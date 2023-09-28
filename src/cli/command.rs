@@ -55,7 +55,7 @@ impl FromStr for Command {
             Some("regen") => Command::Swipe,
             Some("undo") => Command::Undo,
             Some("redo") => Command::Redo,
-            Some(w) => bail!("Unrecognized command: \"{w}\""),
+            Some(w) => bail!("Unrecognized command: \"{w}\". Type 'help' to view a list of commands."),
         };
 
         Ok(out)
