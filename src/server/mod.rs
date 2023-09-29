@@ -3,7 +3,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use crate::files::{ServerConfig, ServerPrompt};
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use reqwest::Client;
 use serde_json::Value;
 use tokio::process::{Child, Command};
@@ -32,18 +32,20 @@ fn spawn_server(config: ServerConfig, port: u16) -> Result<Child> {
         .current_dir(
             Path::new(&config.executable_file)
                 .parent()
-                .expect("Executable file has no parent directory!"),
+                .context("Executable file has no parent directory!")?,
         )
         .stderr(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stdin(std::process::Stdio::null());
 
+    // Don't exit upon ctrl-c.
     cmd.process_group(0);
 
     let mut cmd: Command = cmd.into();
 
     cmd.kill_on_drop(true);
     unsafe {
+        // Exit when parent process exits.
         cmd.pre_exec(|| {
             libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGHUP);
             Ok(())
@@ -68,21 +70,6 @@ fn generation_cost(last_prompt: &str, new_prompt: &str) -> f64 {
     (new_prompt.len() - shared_prefix_length) as f64 + erased as f64 / 2.
 }
 
-async fn servers_online(client: &Client, urls: &[String]) -> Result<Vec<bool>> {
-    let handles = urls
-        .iter()
-        .map(|url| tokio::spawn(is_online(client.clone(), url.clone())))
-        .collect::<Vec<_>>();
-
-    let mut out = Vec::new();
-
-    for handle in handles {
-        out.push(handle.await??);
-    }
-
-    Ok(out)
-}
-
 impl Servers {
     pub async fn from_config(config: &ServerConfig) -> Result<Servers> {
         let mut children = Vec::new();
@@ -97,7 +84,11 @@ impl Servers {
             last_prompts.push(String::new());
         }
 
-        if servers_online(&client, &urls).await?.into_iter().any(|x| x) {
+        if servers_are_online(&client, &urls)
+            .await?
+            .into_iter()
+            .any(|x| x)
+        {
             bail!("A Kobold server is already running on at least one specified port!");
         }
 
@@ -106,7 +97,11 @@ impl Servers {
         loop {
             tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-            if servers_online(&client, &urls).await?.into_iter().all(|x| x) {
+            if servers_are_online(&client, &urls)
+                .await?
+                .into_iter()
+                .all(|x| x)
+            {
                 break;
             }
         }
@@ -131,7 +126,7 @@ impl Servers {
     }
 }
 
-async fn is_online(client: Client, url: String) -> Result<bool> {
+async fn server_is_online(client: Client, url: String) -> Result<bool> {
     let res = client
         .post(&format!("http://{url}/api/v1/info/version"))
         .header("Content-Length", "0")
@@ -143,6 +138,21 @@ async fn is_online(client: Client, url: String) -> Result<bool> {
         Err(e) if e.is_connect() || e.is_request() => Ok(false),
         Err(e) => Err(e.into()),
     }
+}
+
+async fn servers_are_online(client: &Client, urls: &[String]) -> Result<Vec<bool>> {
+    let handles = urls
+        .iter()
+        .map(|url| tokio::spawn(server_is_online(client.clone(), url.clone())))
+        .collect::<Vec<_>>();
+
+    let mut out = Vec::new();
+
+    for handle in handles {
+        out.push(handle.await??);
+    }
+
+    Ok(out)
 }
 
 async fn check_request(client: &Client, url: &str) -> Result<String> {
@@ -217,16 +227,6 @@ async fn check_actor(
 
 use std::future::Future;
 
-/// Ensure that no progress is made on a future until it is awaited
-async fn await_before<Func, F, T>(f: Func) -> T
-where
-    Func: FnOnce() -> F,
-    F: Future<Output = T>,
-{
-    std::future::ready(()).await;
-    f().await
-}
-
 impl Servers {
     pub fn generate(
         &mut self,
@@ -242,7 +242,7 @@ impl Servers {
 
         (
             generate_request(client.clone(), url.clone(), prompt),
-            await_before(move || abort_request(client, url)),
+            abort_request(client, url),
         )
     }
 
@@ -290,7 +290,7 @@ impl Servers {
 
         (
             generate(client.clone(), url.clone(), prompt, send.clone()),
-            await_before(move || abort(client, url, send)),
+            abort(client, url, send),
         )
     }
 }

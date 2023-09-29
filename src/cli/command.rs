@@ -22,7 +22,7 @@ impl FromStr for Command {
         let mut words = s.split_whitespace();
 
         let out = match words.next() {
-            None => bail!("Cannot parse Command from empty input"),
+            None => bail!("Cannot parse command from empty input"),
             Some("help") => Command::Help,
             Some("exit") => Command::Exit,
             Some("load") => {
@@ -34,9 +34,15 @@ impl FromStr for Command {
             }
             Some("reload") => Command::Reload,
             Some("char") => {
-                let Some(name) = words.next() else {
-                    bail!("\"char\" command requires a name argument")
+                let Some(space) = s.find(' ') else {
+                    bail!("\"char\" command requires a name argument");
                 };
+
+                let name = s[space..].trim();
+
+                if name.is_empty() {
+                    bail!("\"char\" command requires a name argument");
+                }
 
                 Command::Char(name.to_string())
             }
@@ -47,7 +53,7 @@ impl FromStr for Command {
                     if let Ok(i) = s.parse::<usize>() {
                         Command::SwipeIndex(i)
                     } else {
-                        bail!("Unrecognized subcommand for swipe: \"{s}\"")
+                        bail!("Unrecognized subcommand for swipe: {s:?}")
                     }
                 }
             },
@@ -55,7 +61,9 @@ impl FromStr for Command {
             Some("regen") => Command::Swipe,
             Some("undo") => Command::Undo,
             Some("redo") => Command::Redo,
-            Some(w) => bail!("Unrecognized command: \"{w}\". Type 'help' to view a list of commands."),
+            Some(c) => {
+                bail!("Unrecognized command: {c:?}. Type \"help\" to view a list of commands.")
+            }
         };
 
         Ok(out)
