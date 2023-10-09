@@ -21,13 +21,19 @@ pub struct Servers {
 fn spawn_server(config: ServerConfig, port: u16) -> Result<Child> {
     let mut cmd = std::process::Command::new(&config.executable_file);
 
-    cmd.args(["--stream", "--skiplauncher", "--unbantokens"])
+    cmd.args(["--skiplauncher"])
         .args(["--model", &config.model_file])
         .args(["--host", "127.0.0.1"])
-        .args(["--port", &format!("{port}")])
-        .args(["--threads", &format!("{}", config.threads)])
-        .args(["--blasbatchsize", &format!("{}", config.blas_batch_size)])
-        .args(["--contextsize", &format!("{}", config.context_size)])
+        .args(["--port", &port.to_string()])
+        .args(["--threads", &config.threads.to_string()])
+        .args(["--blasbatchsize", &config.blas_batch_size.to_string()])
+        .args(["--contextsize", &config.context_size.to_string()]);
+
+    if let Some(blasthreads) = config.blasthreads {
+        cmd.args(["--blasthreads", &blasthreads.to_string()]);
+    }
+
+    cmd
         .args(&config.custom_args)
         .current_dir(
             Path::new(&config.executable_file)
@@ -65,9 +71,10 @@ fn generation_cost(last_prompt: &str, new_prompt: &str) -> f64 {
         .position(|(p1, p2)| p1 != p2)
         .unwrap_or(last_prompt.len().min(new_prompt.len()));
 
+    let parsed = new_prompt.len() - shared_prefix_length;
     let erased = last_prompt.len() - shared_prefix_length;
 
-    (new_prompt.len() - shared_prefix_length) as f64 + erased as f64 / 2.
+    parsed as f64 + erased as f64 * 0.3
 }
 
 impl Servers {
